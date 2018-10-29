@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0 ()
+
+- Feature #263: `MarkupMachine` can be used to retrieve a Machine's dictionary representation
+  - `GraphMachine` uses this representation for Graphs now and does not rely on `Machine` attributes any longer
+- Feature: The default value of `State.ignore_invalid_triggers` changed to `None`. If it is not explicitly set, the `Machine`'s value is used instead.
+
 ## 0.6.9 ()
 
 - Bugfix #314: Do not override already defined model functions with convenience functions (thanks @Arkanayan)
