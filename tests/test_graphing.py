@@ -8,6 +8,7 @@ from .test_core import TestTransitions
 
 from transitions.extensions import MachineFactory
 from transitions.extensions.nesting import NestedState
+from transitions.extensions.states import add_state_features, Timeout, Tags
 from unittest import skipIf
 import tempfile
 import os
@@ -172,6 +173,17 @@ class TestDiagrams(TestTransitions):
         nodes, edges = parse_dot(g3.source)
         self.assertEqual(len(edges), 3)
         self.assertEqual(len(nodes), 4)
+
+    def test_state_tags(self):
+
+        @add_state_features(Tags, Timeout)
+        class CustomMachine(self.machine_cls):
+            pass
+
+        self.states[0] = {'name': 'A', 'tags': ['new', 'polling'], 'timeout': 5, 'on_enter': 'say_hello',
+                          'on_exit': 'say_goodbye', 'on_timeout': 'do_something'}
+        m = CustomMachine(states=self.states, transitions=self.transitions, initial='A', show_state_attributes=True)
+        g = m.get_graph(show_roi=True).generate()
 
 
 @skipIf(pgv is None, 'Graph diagram test requires graphviz')

@@ -10,7 +10,7 @@ import logging
 from functools import partial
 
 from ..core import Transition
-from .markup import MarkupMachine, rep
+from .markup import MarkupMachine
 from .nesting import NestedState
 try:
     import pygraphviz as pgv

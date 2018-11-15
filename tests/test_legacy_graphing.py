@@ -1,0 +1,212 @@
+try:
+    from builtins import object
+except ImportError:
+    pass
+
+from .utils import Stuff
+from . import test_graphing
+from .test_graphing import edge_label_from_transition_label
+from transitions.extensions.nesting import NestedState
+from transitions.extensions.factory import HierarchicalMarkupMachine, NestedTransition
+from transitions.extensions.diagrams_pygraphviz import GraphMachine, TransitionGraphSupport, NestedGraph
+from transitions.extensions.states import add_state_features, Timeout, Tags
+from unittest import skipIf
+import tempfile
+import os
+
+try:
+    # Just to skip tests if graphviz not installed
+    import pygraphviz as pgv  # @UnresolvedImport
+except ImportError:  # pragma: no cover
+    pgv = None
+
+
+@skipIf(pgv is None, 'Graph diagram requires pygraphviz')
+class PygraphvizTest(test_graphing.TestDiagrams):
+
+    def setUp(self):
+        super(PygraphvizTest, self).setUp()
+        self.machine_cls = GraphMachine
+
+    def test_diagram(self):
+        m = self.machine_cls(states=self.states, transitions=self.transitions, initial='A', auto_transitions=False, title='a test')
+        graph = m.get_graph()
+        self.assertIsNotNone(graph)
+        self.assertTrue(graph.directed)
+
+        # Test that graph properties match the Machine
+        self.assertEqual(
+            set(m.states.keys()), set([n.name for n in graph.nodes()]))
+        triggers = set([n.attr['label'] for n in graph.edges()])
+        for t in triggers:
+            t = edge_label_from_transition_label(t)
+            self.assertIsNotNone(getattr(m, t))
+
+        self.assertEqual(len(graph.edges()), len(self.transitions))
+
+        # write diagram to temp file
+        target = tempfile.NamedTemporaryFile()
+        graph.draw(target.name, prog='dot')
+        self.assertTrue(os.path.getsize(target.name) > 0)
+
+        # cleanup temp file
+        target.close()
+
+        graph = m.get_graph(force_new=True, title=False)
+        self.assertEqual("", graph.graph_attr['label'])
+
+    def test_if_multiple_edges_are_supported(self):
+        transitions = [
+            ['event_0', 'a', 'b'],
+            ['event_1', 'a', 'b'],
+            ['event_2', 'a', 'b'],
+            ['event_3', 'a', 'b'],
+        ]
+
+        m = self.machine_cls(
+            states=['a', 'b'],
+            transitions=transitions,
+            initial='a',
+            auto_transitions=False,
+        )
+
+        graph = m.get_graph()
+        self.assertIsNotNone(graph)
+        self.assertTrue("digraph" in str(graph))
+
+        triggers = [transition[0] for transition in transitions]
+        for trigger in triggers:
+            self.assertTrue(trigger in str(graph))
+
+    def test_multi_model_state(self):
+        m1 = Stuff(machine_cls=None)
+        m2 = Stuff(machine_cls=None)
+        m = self.machine_cls(model=[m1, m2], states=self.states, transitions=self.transitions, initial='A')
+        m1.walk()
+        self.assertEqual(m1.get_graph().get_node(m1.state).attr['color'],
+                         m1.get_graph().style_attributes['node']['active']['color'])
+        self.assertEqual(m2.get_graph().get_node(m1.state).attr['color'],
+                         m2.get_graph().style_attributes['node']['default']['color'])
+        # backwards compatibility test
+        self.assertEqual(id(m.get_graph()), id(m1.get_graph()))
+
+    def test_to_method_filtering(self):
+        m = self.machine_cls(states=['A', 'B', 'C'], initial='A')
+        m.add_transition('to_state_A', 'B', 'A')
+        m.add_transition('to_end', '*', 'C')
+        e = m.get_graph().get_edge('B', 'A')
+        self.assertEqual(e.attr['label'], 'to_state_A')
+        e = m.get_graph().get_edge('A', 'C')
+        self.assertEqual(e.attr['label'], 'to_end')
+        with self.assertRaises(KeyError):
+            m.get_graph().get_edge('A', 'B')
+        m2 = self.machine_cls(states=['A', 'B'], initial='A', show_auto_transitions=True)
+        self.assertEqual(len(m2.get_graph().get_edge('B', 'A')), 2)
+        self.assertEqual(m2.get_graph().get_edge('A', 'B').attr['label'], 'to_B')
+
+    def test_roi(self):
+        m = self.machine_cls(states=['A', 'B', 'C', 'D', 'E', 'F'], initial='A')
+        m.add_transition('to_state_A', 'B', 'A')
+        m.add_transition('to_state_C', 'B', 'C')
+        m.add_transition('to_state_F', 'B', 'F')
+        g1 = m.get_graph(show_roi=True)
+        self.assertEqual(len(g1.edges()), 0)
+        self.assertEqual(len(g1.nodes()), 1)
+        m.to_B()
+        g2 = m.get_graph(show_roi=True)
+        self.assertEqual(len(g2.edges()), 4)
+        self.assertEqual(len(g2.nodes()), 4)
+
+    def test_state_tags(self):
+
+        @add_state_features(Tags, Timeout)
+        class CustomMachine(self.machine_cls):
+            pass
+
+        self.states[0] = {'name': 'A', 'tags': ['new', 'polling'], 'timeout': 5, 'on_enter': 'say_hello',
+                          'on_exit': 'say_goodbye', 'on_timeout': 'do_something'}
+        m = CustomMachine(states=self.states, transitions=self.transitions, initial='A', show_state_attributes=True)
+        g = m.get_graph(show_roi=True)
+
+
+@skipIf(pgv is None, 'NestedGraph diagram requires pygraphviz')
+class TestPygraphvizNested(PygraphvizTest):
+
+    def setUp(self):
+        super(TestPygraphvizNested, self).setUp()
+
+        class NestedGraphTransition(TransitionGraphSupport, NestedTransition):
+            pass
+
+        class HierarchicalGraphMachine(GraphMachine, HierarchicalMarkupMachine):
+            transition_cls = NestedGraphTransition
+            graph_cls = NestedGraph
+
+        self.machine_cls = HierarchicalGraphMachine
+        self.states = ['A', 'B',
+                       {'name': 'C', 'children': [{'name': '1', 'children': ['a', 'b', 'c']},
+                                                  '2', '3']}, 'D']
+        self.transitions = [
+            {'trigger': 'walk', 'source': 'A', 'dest': 'B'},     # 1 edge
+            {'trigger': 'run', 'source': 'B', 'dest': 'C'},      # + 1 edge
+            {'trigger': 'sprint', 'source': 'C', 'dest': 'D',    # + 1 edge
+             'conditions': 'is_fast'},
+            {'trigger': 'sprint', 'source': 'C', 'dest': 'B'},   # + 1 edge
+            {'trigger': 'reset', 'source': '*', 'dest': 'A'}]    # + 10 (8 nodes; 2 cluster) edges = 14
+
+    def test_diagram(self):
+        m = self.machine_cls(states=self.states, transitions=self.transitions, initial='A', auto_transitions=False,
+                             title='A test', show_conditions=True)
+        graph = m.get_graph()
+        self.assertIsNotNone(graph)
+        self.assertTrue("digraph" in str(graph))
+
+        # Test that graph properties match the Machine
+        node_names = set([n.name for n in graph.nodes()])
+        self.assertEqual(set(m.states.keys()) - set(['C', 'C%s1' % NestedState.separator]),
+                         node_names - set(['C_anchor', 'C%s1_anchor' % NestedState.separator]))
+
+        triggers = []
+        for n in graph.edges():
+            if n.attr['label']:
+                triggers.append(n.attr['label'])
+            elif n.attr['headlabel']:
+                triggers.append(n.attr['headlabel'])
+            else:
+                triggers.append(n.attr['taillabel'])
+        for t in set(triggers):
+            t = edge_label_from_transition_label(t)
+            self.assertIsNotNone(getattr(m, t))
+
+        self.assertEqual(len(graph.edges()), 14)  # see above
+
+        m.walk()
+        m.run()
+
+        # write diagram to temp file
+        target = tempfile.NamedTemporaryFile()
+        sgraph = graph.get_subgraph('cluster_C')
+        sgraph = sgraph.get_subgraph('cluster_C%s1' % NestedState.separator)
+        self.assertIsNotNone(sgraph)
+        graph.draw(target.name, prog='dot')
+        self.assertTrue(os.path.getsize(target.name) > 0)
+
+        # cleanup temp file
+        target.close()
+
+    def test_roi(self):
+        class Model:
+            def is_fast(self, *args, **kwargs):
+                return True
+        model = Model()
+        m = self.machine_cls(model, states=self.states, transitions=self.transitions,
+                             initial='A', title='A test', show_conditions=True)
+        model.walk()
+        model.run()
+        g1 = model.get_graph(show_roi=True)
+        self.assertEqual(len(g1.edges()), 4)
+        self.assertEqual(len(g1.nodes()), 4)
+        model.sprint()
+        g2 = model.get_graph(show_roi=True)
+        self.assertEqual(len(g2.edges()), 2)
+        self.assertEqual(len(g2.nodes()), 3)

@@ -184,7 +184,6 @@ class Graph(object):
 
         """
         filename, ext = splitext(filename)
-        print(filename, ext)
         format = format if format is not None else ext[1:]
         graph = self.generate()
         graph.engine = prog
