@@ -97,8 +97,8 @@ class TestMarkupMachine(TestCase):
         m2 = self.machine_cls(markup=m1.markup)
         self.assertEqual(m1.state, m2.state)
         self.assertEqual(len(m1.models), len(m2.models))
-        self.assertEqual(m1.states.keys(), m2.states.keys())
-        self.assertEqual(m1.events.keys(), m2.events.keys())
+        self.assertEqual(sorted(m1.states.keys()), sorted(m2.states.keys()))
+        self.assertEqual(sorted(m1.events.keys()), sorted(m2.events.keys()))
         m2.run()
         m2.sprint()
         self.assertNotEqual(m1.state, m2.state)
@@ -113,8 +113,8 @@ class TestMarkupMachine(TestCase):
         self.assertIsInstance(model2, SimpleModel)
         self.assertEqual(len(m1.models), len(m2.models))
         self.assertEqual(model1.state, model2.state)
-        self.assertEqual(m1.states.keys(), m2.states.keys())
-        self.assertEqual(m1.events.keys(), m2.events.keys())
+        self.assertEqual(sorted(m1.states.keys()), sorted(m2.states.keys()))
+        self.assertEqual(sorted(m1.events.keys()), sorted(m2.events.keys()))
 
     def test_conditions_unless(self):
         s = Stuff(machine_cls=self.machine_cls)
