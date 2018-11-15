@@ -970,13 +970,22 @@ Additional Keywords:
 * `show_auto_transitions` (default False): Shows auto transitions in graph
 * `show_state_attributes` (default False): Show callbacks (enter, exit), tags and timeouts in graph
 
-Transitions can generate basic state diagrams displaying all valid transitions between states. To use the graphing functionality, you'll need to have `pygraphviz` installed:
- 
-    pip install pygraphviz  # install pygraphviz manually...
-    pip install transitions[diagrams]  # ... or install transitions with 'diagrams' extras
-    
-With `GraphMachine` enabled, a PyGraphviz `AGraph` object is generated during machine initialization and is constantly updated when the machine state changes:
+Transitions can generate basic state diagrams displaying all valid transitions between states. To use the graphing functionality, you'll need to have `graphviz` or `pygraphviz` installed:   
+To generate graphs with the package `graphviz`, you need to install [Graphviz](https://graphviz.org/) manually or via a package manager.
 
+    sudo apt-get install graphviz  # Ubuntu and Debian
+    brew install graphviz  # MacOS
+    conda install graphviz python-graphviz  # (Ana)conda
+
+Now you can install the actual Python packages
+
+    pip install graphviz pygraphviz # install graphviz and/or pygraphviz manually...
+    pip install transitions[diagrams]  # ... or install transitions with 'diagrams' extras
+
+If `graphviz` is not found or `Graphviz` is not set up correctly, `transitions` fallback to `pygraphviz`.
+However, `pygraphviz` support may be dropped in the future.
+The usage of the returned graph varies slightly due to backwards compatibility.
+ 
 ```python
 from transitions.extensions import GraphMachine as Machine
 m = Model()
@@ -985,10 +994,18 @@ machine = Machine(model=m, ...)
 # Machine(model=m, show_auto_transitions=True, ...)
 
 # draw the whole graph ...
-m.get_graph().draw('my_state_diagram.png', prog='dot')
+graph = m.get_graph()
+# ... with graphviz ...
+graph.generate().render('my_state_diagram.png')
+# ... or pygraphviz ...
+graph.draw('my_state_diagram.png', prog='dot')
 # ... or just the region of interest
 # (previous state, active state and all reachable states)
-m.get_graph(show_roi=True).draw('my_state_diagram.png', prog='dot')
+roi = m.get_graph(show_roi=True)
+# ... with graphviz ...
+roi.generate().render('my_state_diagram.png')
+# ... or pygraphviz
+roi.draw('my_state_diagram.png', prog='dot')
 ```
 
 This produces something like this:
