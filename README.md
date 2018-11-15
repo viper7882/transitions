@@ -983,10 +983,15 @@ Now you can install the actual Python packages
     pip install transitions[diagrams]  # ... or install transitions with 'diagrams' extras
 
 If `graphviz` is not found or `Graphviz` is not set up correctly, `transitions` fallback to `pygraphviz`.
+You can also tell `transitions` explicitly to use `pyraphviz` by setting `transitions.use_pygraphviz = True`. 
 However, `pygraphviz` support may be dropped in the future.
-The usage of the returned graph varies slightly due to backwards compatibility.
- 
+The usage of the returned graph varies slightly.
+However, the `grapvhiz` implementation provides `model.get_graph.draw` for backwards compatibility.
+
 ```python
+# import transitions
+# transitions.use_pygraphviz = True  # force pygraphviz
+
 from transitions.extensions import GraphMachine as Machine
 m = Model()
 machine = Machine(model=m, ...)

@@ -69,8 +69,11 @@ class TestDiagrams(TestTransitions):
         #     self.assertIsNotNone(getattr(m, t))
 
         # write diagram to temp file
-        target = tempfile.NamedTemporaryFile()
+        target = tempfile.NamedTemporaryFile(suffix='.png')
         graph.render(target.name, format='png')
+        self.assertTrue(os.path.getsize(target.name) > 0)
+        # backwards compatibility check
+        m.get_graph().draw(target.name, format='png', prog='dot')
         self.assertTrue(os.path.getsize(target.name) > 0)
 
         # cleanup temp file
@@ -212,8 +215,11 @@ class TestDiagramsNested(TestDiagrams):
         m.run()
 
         # write diagram to temp file
-        target = tempfile.NamedTemporaryFile()
+        target = tempfile.NamedTemporaryFile(suffix='.png')
         graph.render(target.name)
+        self.assertTrue(os.path.getsize(target.name) > 0)
+        # backwards compatibility check
+        m.get_graph().draw(target.name, prog='dot')
         self.assertTrue(os.path.getsize(target.name) > 0)
 
         # cleanup temp file

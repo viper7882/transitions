@@ -8,7 +8,6 @@
 
 import logging
 from functools import partial
-import warnings
 
 from ..core import Transition
 from .markup import MarkupMachine, rep
@@ -25,12 +24,6 @@ _LOGGER.addHandler(logging.NullHandler())
 # without it, Python 3.0 - 3.3 will not support pickling
 # https://github.com/pytransitions/transitions/issues/236
 _super = super
-
-# make deprecation warnings of transition visible for module users
-warnings.filterwarnings(action='default', message=r".*transitions version.*")
-warnings.warn("Starting from transitions version 0.7.0 graphviz will be the default for creating graphs. "
-              "Fallback to pygraphviz since graphviz could not be found or 'dot' is not in your PATH. "
-              "Please consider installing graphviz.", DeprecationWarning)
 
 
 class Graph(object):

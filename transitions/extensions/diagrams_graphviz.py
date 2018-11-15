@@ -9,6 +9,7 @@
 import logging
 from functools import partial
 from collections import defaultdict
+from os.path import splitext
 
 from ..core import Transition
 from .markup import MarkupMachine
@@ -173,6 +174,21 @@ class Graph(object):
         except KeyError:
             _LOGGER.error("Graph creation incomplete!")
         return fsm_graph
+
+    def draw(self, filename, format=None, prog='dot', args=''):
+        """ Generates and saves an image of the state machine using graphviz.
+        Args:
+            filename (string): path and name of image output
+            format (string): Optional format of the output file
+        Returns:
+
+        """
+        filename, ext = splitext(filename)
+        print(filename, ext)
+        format = format if format is not None else ext[1:]
+        graph = self.generate()
+        graph.engine = prog
+        graph.render(filename, format=format if format else 'png', cleanup=True)
 
     def _convert_state_attributes(self, state):
         label = state.get('label', state['name'])

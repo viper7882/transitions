@@ -13,3 +13,7 @@ __copyright__ = "Copyright (c) 2017 Tal Yarkoni"
 __license__ = "MIT"
 __summary__ = "A lightweight, object-oriented finite state machine in Python"
 __uri__ = "https://github.com/tyarkoni/transitions"
+
+# in 0.7.0 transitions switched to graphviz as the default graph generation library
+# for backwards compatibility, using pygraphviz can be forced here
+use_pygraphviz = False
