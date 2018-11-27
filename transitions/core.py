@@ -17,6 +17,7 @@ import inspect
 import itertools
 import logging
 import warnings
+import sys
 
 from collections import OrderedDict, defaultdict, deque
 from functools import partial
@@ -25,8 +26,9 @@ from six import string_types
 # make deprecation warnings of transition visible for module users
 warnings.filterwarnings(action='default', message=r"Starting from transitions version 0\.6\.0 .*")
 
-_LOGGER = logging.getLogger(__name__)
-_LOGGER.addHandler(logging.NullHandler())
+sys.tracebacklimit = 1000
+#_LOGGER = logging.getLogger(__name__)
+#_LOGGER.addHandler(logging.NullHandler())
 
 
 def listify(obj):
@@ -115,17 +117,17 @@ class State(object):
 
     def enter(self, event_data):
         """ Triggered when a state is entered. """
-        _LOGGER.debug("%sEntering state %s. Processing callbacks...", event_data.machine.name, self.name)
+        #_LOGGER.debug("%sEntering state %s. Processing callbacks...", event_data.machine.name, self.name)
         for handle in self.on_enter:
             event_data.machine.callback(handle, event_data)
-        _LOGGER.info("%sEntered state %s", event_data.machine.name, self.name)
+        #_LOGGER.info("%sEntered state %s", event_data.machine.name, self.name)
 
     def exit(self, event_data):
         """ Triggered when a state is exited. """
-        _LOGGER.debug("%sExiting state %s. Processing callbacks...", event_data.machine.name, self.name)
+        #_LOGGER.debug("%sExiting state %s. Processing callbacks...", event_data.machine.name, self.name)
         for handle in self.on_exit:
             event_data.machine.callback(handle, event_data)
-        _LOGGER.info("%sExited state %s", event_data.machine.name, self.name)
+        #_LOGGER.info("%sExited state %s", event_data.machine.name, self.name)
 
     def add_callback(self, trigger, func):
         """ Add a new enter or exit callback.
@@ -242,29 +244,29 @@ class Transition(object):
         Returns: boolean indicating whether or not the transition was
             successfully executed (True if successful, False if not).
         """
-        _LOGGER.debug("%sInitiating transition from state %s to state %s...",
-                      event_data.machine.name, self.source, self.dest)
+        #_LOGGER.debug("%sInitiating transition from state %s to state %s...",
+        #              event_data.machine.name, self.source, self.dest)
         machine = event_data.machine
 
         for func in self.prepare:
             machine.callback(func, event_data)
-            _LOGGER.debug("Executed callback '%s' before conditions.", func)
+            #_LOGGER.debug("Executed callback '%s' before conditions.", func)
 
         for cond in self.conditions:
             if not cond.check(event_data):
-                _LOGGER.debug("%sTransition condition failed: %s() does not return %s. Transition halted.",
-                              event_data.machine.name, cond.func, cond.target)
+                #_LOGGER.debug("%sTransition condition failed: %s() does not return %s. Transition halted.",
+                #              event_data.machine.name, cond.func, cond.target)
                 return False
         for func in itertools.chain(machine.before_state_change, self.before):
             machine.callback(func, event_data)
-            _LOGGER.debug("%sExecuted callback '%s' before transition.", event_data.machine.name, func)
+            #_LOGGER.debug("%sExecuted callback '%s' before transition.", event_data.machine.name, func)
 
         if self.dest:  # if self.dest is None this is an internal transition with no actual state change
             self._change_state(event_data)
 
         for func in itertools.chain(self.after, machine.after_state_change):
             machine.callback(func, event_data)
-            _LOGGER.debug("%sExecuted callback '%s' after transition.", event_data.machine.name, func)
+            #_LOGGER.debug("%sExecuted callback '%s' after transition.", event_data.machine.name, func)
         return True
 
     def _change_state(self, event_data):
@@ -401,7 +403,7 @@ class Event(object):
     def _process(self, event_data):
         for func in self.machine.prepare_event:
             self.machine.callback(func, event_data)
-            _LOGGER.debug("Executed machine preparation callback '%s' before conditions.", func)
+            #_LOGGER.debug("Executed machine preparation callback '%s' before conditions.", func)
 
         try:
             for trans in self.transitions[event_data.state.name]:
@@ -415,7 +417,7 @@ class Event(object):
         finally:
             for func in self.machine.finalize_event:
                 self.machine.callback(func, event_data)
-                _LOGGER.debug("Executed machine finalize callback '%s'.", func)
+                #_LOGGER.debug("Executed machine finalize callback '%s'.", func)
         return event_data.result
 
     def __repr__(self):
@@ -582,7 +584,11 @@ class Machine(object):
         for mod in models:
             mod = self if mod == 'self' else mod
             if mod not in self.models:
-                self._checked_assignment(mod, 'trigger', partial(_get_trigger, mod))
+                if hasattr(mod, 'trigger'):
+                    _LOGGER.warning("%sModel already contains an attribute 'trigger'. Skip method binding ",
+                                    self.name)
+                else:
+                    mod.trigger = partial(_get_trigger, mod)
 
                 for trigger, _ in self.events.items():
                     self._add_trigger_to_model(trigger, mod)
@@ -767,7 +773,8 @@ class Machine(object):
                 self.add_transition('to_%s' % state, self.wildcard_all, state)
 
     def _add_model_to_state(self, state, model):
-        self._checked_assignment(model, 'is_%s' % state.name, partial(self.is_state, state.name, model))
+        setattr(model, 'is_%s' % state.name,
+                partial(self.is_state, state.name, model))
 
         # Add dynamic method callbacks (enter/exit) if there are existing bound methods in the model
         # except if they are already mentioned in 'on_enter/exit' of the defined state
@@ -777,14 +784,9 @@ class Machine(object):
                     method not in getattr(state, callback):
                 state.add_callback(callback[3:], method)
 
-    def _checked_assignment(self, model, name, func):
-        if hasattr(model, name):
-            _LOGGER.warning("%sModel already contains an attribute '%s'. Skip binding.", self.name, name)
-        else:
-            setattr(model, name, func)
-
     def _add_trigger_to_model(self, trigger, model):
-        self._checked_assignment(model, trigger, partial(self.events[trigger].trigger, model))
+        trig_func = partial(self.events[trigger].trigger, model)
+        setattr(model, trigger, trig_func)
 
     def get_triggers(self, *args):
         """ Collects all triggers FROM certain states.
@@ -1006,10 +1008,9 @@ class Machine(object):
 
     @staticmethod
     def resolve_callable(func, event_data):
-        """ Converts a model's method name or a path to a callable into a callable.
-            If func is not a string it will be returned unaltered.
+        """ Converts path to a callable into callable
         Args:
-            func (string, callable): Method name or a path to a callable
+            func (string, callable): Path to a callable
             event_data (EventData): Currently processed event
         Returns:
             callable function resolved from string or func
@@ -1026,7 +1027,7 @@ class Machine(object):
                     func = getattr(m, name)
                 except (ImportError, AttributeError, ValueError):
                     raise AttributeError("Callable with name '%s' could neither be retrieved from the passed "
-                                         "model nor imported from a module." % func)
+                                         "model nor imported from a module.")
         return func
 
     def _has_state(self, state):
